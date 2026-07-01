@@ -12,6 +12,18 @@ export interface Paper {
   has_slides: boolean;
   has_skill?: boolean;
   source_file?: string | null;
+  category_id?: string | null;
+}
+
+export interface BookCategory {
+  id: string;
+  name: string;
+  created_at: number;
+}
+
+export interface BookCategoriesState {
+  categories: BookCategory[];
+  assignments: Record<string, string>;
 }
 
 export interface PaperFile {

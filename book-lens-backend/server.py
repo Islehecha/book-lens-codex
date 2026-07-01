@@ -33,6 +33,7 @@ logger = logging.getLogger("book-lens-codex-backend")
 BASE_DIR = Path(__file__).parent
 PROJECT_DIR = BASE_DIR.parent  # The main project directory
 BOOK_NOTES_DIR = PROJECT_DIR / "book-notes"
+CATEGORIES_FILE = BOOK_NOTES_DIR / ".book-lens-categories.json"
 CODEX_WORKSPACE_LINK = Path(os.environ.get("BOOK_LENS_CODEX_WORKSPACE", "/private/tmp/book-lens-codex-workspace"))
 
 # Server port — resolved once at startup
@@ -49,6 +50,63 @@ def _slug_name(value: str, fallback: str) -> str:
     raw = re.sub(r'[^a-z0-9\u4e00-\u9fff\-]+', '-', raw)
     raw = re.sub(r'-+', '-', raw).strip('-')
     return raw or fallback
+
+
+def _read_categories() -> dict:
+    if not CATEGORIES_FILE.exists():
+        return {"categories": [], "assignments": {}}
+    try:
+        data = json.loads(CATEGORIES_FILE.read_text(encoding="utf-8"))
+    except Exception:
+        logger.warning("Could not read categories file; falling back to empty state")
+        return {"categories": [], "assignments": {}}
+    categories = data.get("categories") if isinstance(data, dict) else []
+    assignments = data.get("assignments") if isinstance(data, dict) else {}
+    if not isinstance(categories, list):
+        categories = []
+    if not isinstance(assignments, dict):
+        assignments = {}
+    clean_categories = []
+    seen = set()
+    for item in categories:
+        if not isinstance(item, dict):
+            continue
+        cid = str(item.get("id", "")).strip()
+        name = str(item.get("name", "")).strip()
+        if not cid or not name or cid in seen:
+            continue
+        seen.add(cid)
+        clean_categories.append({
+            "id": cid,
+            "name": name,
+            "created_at": float(item.get("created_at") or time.time()),
+        })
+    clean_assignments = {
+        str(book): str(category)
+        for book, category in assignments.items()
+        if isinstance(book, str) and isinstance(category, str)
+    }
+    return {"categories": clean_categories, "assignments": clean_assignments}
+
+
+def _write_categories(data: dict) -> None:
+    BOOK_NOTES_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = CATEGORIES_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(CATEGORIES_FILE)
+
+
+def _assign_book_category(book_name: str, category_id: str | None) -> None:
+    data = _read_categories()
+    assignments = data["assignments"]
+    if category_id:
+        valid_ids = {c["id"] for c in data["categories"]}
+        if category_id not in valid_ids:
+            raise HTTPException(404, "Category not found")
+        assignments[book_name] = category_id
+    else:
+        assignments.pop(book_name, None)
+    _write_categories(data)
 
 
 class SessionEventHub:
@@ -184,6 +242,8 @@ async def list_books():
     if not BOOK_NOTES_DIR.exists():
         return {"books": []}
 
+    category_state = _read_categories()
+    assignments = category_state["assignments"]
     books = []
     for d in BOOK_NOTES_DIR.iterdir():
         if d.is_dir() and not d.name.startswith(".") and not d.name.startswith("__"):
@@ -221,6 +281,7 @@ async def list_books():
                 "presentation_file": html_files[0] if html_files else None,
                 "has_pdf": any(f.endswith('.pdf') for f in files),
                 "source_file": source_file,
+                "category_id": assignments.get(d.name),
                 "mtime": mtime,
             })
     # Sort by modification time, most recent first
@@ -232,6 +293,47 @@ async def list_books():
 async def list_papers_compat():
     result = await list_books()
     return {"papers": result["books"]}
+
+
+@app.get("/api/categories")
+async def get_categories():
+    """Return book categories and one-category-per-book assignments."""
+    return _read_categories()
+
+
+@app.post("/api/categories")
+async def create_category(payload: dict = Body(...)):
+    name = str(payload.get("name", "")).strip()
+    if not name:
+        raise HTTPException(400, "Category name is required")
+    data = _read_categories()
+    cid = _slug_name(name, f"category-{int(time.time())}")
+    existing_ids = {c["id"] for c in data["categories"]}
+    base = cid
+    idx = 2
+    while cid in existing_ids:
+        cid = f"{base}-{idx}"
+        idx += 1
+    category = {"id": cid, "name": name, "created_at": time.time()}
+    data["categories"].append(category)
+    _write_categories(data)
+    return {"category": category}
+
+
+@app.post("/api/categories/assign")
+async def assign_category(payload: dict = Body(...)):
+    book_name = str(payload.get("book_name", "")).strip()
+    category_id_raw = payload.get("category_id")
+    category_id = str(category_id_raw).strip() if category_id_raw else ""
+    if not book_name:
+        raise HTTPException(400, "book_name is required")
+    book_dir = (BOOK_NOTES_DIR / book_name).resolve()
+    if not str(book_dir).startswith(str(BOOK_NOTES_DIR.resolve())):
+        raise HTTPException(403, "Access denied")
+    if not book_dir.exists() or not book_dir.is_dir():
+        raise HTTPException(404, "Book not found")
+    _assign_book_category(book_name, category_id or None)
+    return {"ok": True, "book_name": book_name, "category_id": category_id or None}
 
 
 @app.get("/api/book/{book_name}")
@@ -274,7 +376,11 @@ async def get_paper_detail_compat(paper_name: str):
 
 
 @app.post("/api/upload")
-async def upload_book(file: UploadFile = File(...), name: str = Form("")):
+async def upload_book(
+    file: UploadFile = File(...),
+    name: str = Form(""),
+    category_id: str = Form(""),
+):
     """Upload a common ebook/source file and save to book-notes directory."""
     if not file.filename:
         raise HTTPException(400, "Please upload a file")
@@ -293,6 +399,8 @@ async def upload_book(file: UploadFile = File(...), name: str = Form("")):
     source_path = book_dir / f"source{suffix}"
     content = await file.read()
     source_path.write_bytes(content)
+    if category_id.strip():
+        _assign_book_category(book_name, category_id.strip())
 
     return {"book_name": book_name, "paper_name": book_name, "path": str(source_path), "pdf_path": str(source_path)}
 
@@ -321,6 +429,10 @@ async def rename_book(old_name: str = Form(...), new_name: str = Form(...)):
         raise HTTPException(409, f"'{new_name}' already exists")
 
     old_dir.rename(new_dir)
+    data = _read_categories()
+    if old_name in data["assignments"]:
+        data["assignments"][new_name] = data["assignments"].pop(old_name)
+        _write_categories(data)
     return {"ok": True, "old_name": old_name, "new_name": new_name}
 
 
@@ -330,7 +442,11 @@ async def rename_paper_compat(old_name: str = Form(...), new_name: str = Form(..
 
 
 @app.post("/api/download-book")
-async def download_book(book_name: str = Form(...), url: str = Form(...)):
+async def download_book(
+    book_name: str = Form(...),
+    url: str = Form(...),
+    category_id: str = Form(""),
+):
     """Download a book source file from a direct URL."""
     import subprocess
 
@@ -365,6 +481,8 @@ async def download_book(book_name: str = Form(...), url: str = Form(...)):
         if header != b'%PDF-':
             source_path.unlink()
             raise HTTPException(400, "Downloaded file is not a valid PDF")
+    if category_id.strip():
+        _assign_book_category(book_name, category_id.strip())
 
     return {"ok": True, "path": str(source_path), "size": source_path.stat().st_size}
 

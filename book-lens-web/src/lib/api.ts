@@ -1,4 +1,4 @@
-import { Paper, PaperDetail, Mode } from "./types";
+import { Paper, PaperDetail, Mode, BookCategoriesState, BookCategory } from "./types";
 
 export const BACKEND_BASE =
   typeof window !== "undefined"
@@ -36,18 +36,40 @@ export const api = {
     return jsonFetch(`/api/book/${encodeURIComponent(name)}`);
   },
 
-  async uploadPdf(file: File, name = ""): Promise<{ paper_name: string; pdf_path: string }> {
+  async uploadPdf(file: File, name = "", categoryId = ""): Promise<{ paper_name: string; pdf_path: string }> {
     const fd = new FormData();
     fd.append("file", file);
     fd.append("name", name);
+    fd.append("category_id", categoryId);
     return jsonFetch("/api/upload", { method: "POST", body: fd });
   },
 
-  async downloadPdf(paperName: string, url: string): Promise<{ ok: boolean; path: string; size: number }> {
+  async downloadPdf(paperName: string, url: string, categoryId = ""): Promise<{ ok: boolean; path: string; size: number }> {
     const fd = new FormData();
     fd.append("book_name", paperName);
     fd.append("url", url);
+    fd.append("category_id", categoryId);
     return jsonFetch("/api/download-book", { method: "POST", body: fd });
+  },
+
+  async getCategories(): Promise<BookCategoriesState> {
+    return jsonFetch("/api/categories");
+  },
+
+  async createCategory(name: string): Promise<{ category: BookCategory }> {
+    return jsonFetch("/api/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  async assignCategory(bookName: string, categoryId: string | null): Promise<{ ok: boolean }> {
+    return jsonFetch("/api/categories/assign", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ book_name: bookName, category_id: categoryId }),
+    });
   },
 
   async renamePaper(oldName: string, newName: string) {

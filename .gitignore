@@ -1,6 +1,7 @@
 # Book outputs (generated per-project, not distributable)
 book-notes/*
 !book-notes/.gitkeep
+book-notes/.book-lens-categories.json
 backup/
 .agents/
 
