@@ -1,0 +1,44 @@
+# Book outputs (generated per-project, not distributable)
+book-notes/*
+!book-notes/.gitkeep
+backup/
+
+# Source books and generated binaries
+*.pdf
+*.epub
+*.mobi
+*.azw
+*.azw3
+
+# Extracted images (large binaries)
+images/
+figures/
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+.pnpm-debug.log*
+npm-debug.log*
+
+# Local env (use .env.local.example as template)
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
