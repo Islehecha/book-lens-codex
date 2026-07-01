@@ -42,7 +42,8 @@ Project-local skills live in `.codex/skills/`.
 
 - `book-lens` is the active workflow called by the backend.
 - `frontend-slides` is retained for future slide generation.
-- `vendor-*` directories document external reading skills that influenced the project. See `SKILLS.md`.
+- `book-study`, `book-translation`, and `book-mirror` are vendored upstream reading skills. See `SKILLS.md`.
+- `vendor-*` directories document external skills that could not be fully installed locally yet.
 
 ## Roadmap
 

@@ -2,6 +2,7 @@
 book-notes/*
 !book-notes/.gitkeep
 backup/
+.agents/
 
 # Source books and generated binaries
 *.pdf

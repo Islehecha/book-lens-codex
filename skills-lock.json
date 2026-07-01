@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "skills": {
+    "book-mirror": {
+      "source": "garrytan/gbrain",
+      "sourceType": "github",
+      "skillPath": "skills/book-mirror/SKILL.md",
+      "computedHash": "79c2938f59901a62c21ffb6010188a2aa4b253d7a0aa804a6c95a401a3c5245d"
+    },
+    "book-study": {
+      "source": "sanyuan0704/sanyuan-skills",
+      "sourceType": "github",
+      "skillPath": "skills/book-study/SKILL.md",
+      "computedHash": "f02c38de9b640428987156ffd7d219e12beacf222bb633a06de48698ff466be9"
+    }
+  }
+}
