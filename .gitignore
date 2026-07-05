@@ -4,6 +4,7 @@ book-notes/*
 book-notes/.book-lens-categories.json
 backup/
 .agents/
+.codex/skills-disabled/
 
 # Source books and generated binaries
 *.pdf

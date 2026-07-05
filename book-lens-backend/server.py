@@ -320,6 +320,36 @@ async def create_category(payload: dict = Body(...)):
     return {"category": category}
 
 
+@app.post("/api/categories/{category_id}/rename")
+async def rename_category(category_id: str, payload: dict = Body(...)):
+    name = str(payload.get("name", "")).strip()
+    if not name:
+        raise HTTPException(400, "Category name is required")
+    data = _read_categories()
+    for category in data["categories"]:
+        if category["id"] == category_id:
+            category["name"] = name
+            _write_categories(data)
+            return {"category": category}
+    raise HTTPException(404, "Category not found")
+
+
+@app.delete("/api/categories/{category_id}")
+async def delete_category(category_id: str):
+    data = _read_categories()
+    before = len(data["categories"])
+    data["categories"] = [c for c in data["categories"] if c["id"] != category_id]
+    if len(data["categories"]) == before:
+        raise HTTPException(404, "Category not found")
+    data["assignments"] = {
+        book: cid
+        for book, cid in data["assignments"].items()
+        if cid != category_id
+    }
+    _write_categories(data)
+    return {"ok": True, "category_id": category_id}
+
+
 @app.post("/api/categories/assign")
 async def assign_category(payload: dict = Body(...)):
     book_name = str(payload.get("book_name", "")).strip()

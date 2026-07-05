@@ -64,6 +64,20 @@ export const api = {
     });
   },
 
+  async renameCategory(categoryId: string, name: string): Promise<{ category: BookCategory }> {
+    return jsonFetch(`/api/categories/${encodeURIComponent(categoryId)}/rename`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  async deleteCategory(categoryId: string): Promise<{ ok: boolean }> {
+    return jsonFetch(`/api/categories/${encodeURIComponent(categoryId)}`, {
+      method: "DELETE",
+    });
+  },
+
   async assignCategory(bookName: string, categoryId: string | null): Promise<{ ok: boolean }> {
     return jsonFetch("/api/categories/assign", {
       method: "POST",

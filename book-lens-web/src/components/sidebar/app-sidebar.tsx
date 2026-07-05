@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { BookOpen, ChevronDown, ChevronRight, FileText, FolderPlus, Link2, Upload, Search, Plus, Loader2, Bell, BellOff } from "lucide-react";
+import { BookOpen, ChevronDown, ChevronRight, FileText, FolderPlus, Link2, Upload, Search, Plus, Loader2, Bell, BellOff, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -120,6 +120,33 @@ export function AppSidebar() {
     }
   }
 
+  async function handleRenameCategory(category: BookCategory) {
+    const name = window.prompt("新的分类名称", category.name);
+    if (!name?.trim() || name.trim() === category.name) return;
+    try {
+      const { category: next } = await api.renameCategory(category.id, name.trim());
+      setCategories((prev) => prev.map((item) => item.id === next.id ? next : item));
+      toast.success("分类已重命名");
+    } catch (e) {
+      toast.error("重命名失败", { description: String(e) });
+    }
+  }
+
+  async function handleDeleteCategory(category: BookCategory) {
+    const ok = window.confirm(`删除分类「${category.name}」？分类下的书籍会移到「未分类」，书籍文件不会删除。`);
+    if (!ok) return;
+    try {
+      await api.deleteCategory(category.id);
+      setCategories((prev) => prev.filter((item) => item.id !== category.id));
+      setPapers(papers.map((p) => (
+        p.category_id === category.id ? { ...p, category_id: null } : p
+      )));
+      toast.success("分类已删除");
+    } catch (e) {
+      toast.error("删除分类失败", { description: String(e) });
+    }
+  }
+
   return (
     <aside className="group/sidebar flex h-full w-[260px] shrink-0 flex-col border-r border-border/60 bg-sidebar text-sidebar-foreground">
       <header className="flex items-center gap-2 px-4 py-4 border-b border-sidebar-border/60">
@@ -191,6 +218,14 @@ export function AppSidebar() {
               onDropBook={handleDropBook}
               onDragOverChange={setDragOver}
               onAdded={loadPapers}
+              onRename={group.fixed ? undefined : () => {
+                const category = categories.find((c) => c.id === group.id);
+                if (category) void handleRenameCategory(category);
+              }}
+              onDelete={group.fixed ? undefined : () => {
+                const category = categories.find((c) => c.id === group.id);
+                if (category) void handleDeleteCategory(category);
+              }}
             />
           ))}
         </div>
@@ -218,6 +253,8 @@ function CategorySection({
   onDropBook,
   onDragOverChange,
   onAdded,
+  onRename,
+  onDelete,
 }: {
   id: string;
   name: string;
@@ -232,6 +269,8 @@ function CategorySection({
   onDropBook: (bookName: string, categoryId: string) => void;
   onDragOverChange: (id: string | null) => void;
   onAdded: () => void;
+  onRename?: () => void;
+  onDelete?: () => void;
 }) {
   return (
     <div
@@ -261,15 +300,19 @@ function CategorySection({
           <span className="ml-auto rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-normal">{count}</span>
         </button>
         {id !== UNCATEGORIZED_ID && (
-          <AddPaperDialog
-            onAdded={onAdded}
-            categoryId={id}
-            trigger={
-              <Button variant="ghost" size="icon" className="h-6 w-6" title={`添加到 ${name}`}>
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            }
-          />
+          <>
+            <IconTinyButton label="重命名分类" icon={<Pencil className="h-3 w-3" />} onClick={onRename} />
+            <IconTinyButton label="删除分类" icon={<Trash2 className="h-3 w-3" />} onClick={onDelete} />
+            <AddPaperDialog
+              onAdded={onAdded}
+              categoryId={id}
+              trigger={
+                <Button variant="ghost" size="icon" className="h-6 w-6" title={`添加到 ${name}`}>
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              }
+            />
+          </>
         )}
       </div>
       <AnimatePresence initial={false}>
@@ -284,6 +327,32 @@ function CategorySection({
         ))}
       </AnimatePresence>
     </div>
+  );
+}
+
+function IconTinyButton({
+  label,
+  icon,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onClick?: () => void;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-6 w-6 text-muted-foreground hover:text-foreground"
+      aria-label={label}
+      title={label}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
+    >
+      {icon}
+    </Button>
   );
 }
 
